@@ -15,17 +15,42 @@ class GrocyStockCard extends LitElement {
     this.stockItems = [];
     this.groupedItems = {};
     this.expandedGroups = {};
+    this.amount = {};
+    this.lastFetch = null; // Ajout pour la date/heure de dernière récupération
   }
 
-  async setConfig(config) {
-    console.log("Configuration du GrocyStockCard:", config);
+  setConfig(config) {
     if (!config.grocy_api_key || !config.grocy_api_url) {
       throw new Error("grocy_api_key et grocy_api_url doivent être spécifiés dans la configuration");
     }
     this.config = config;
     this.grocy = new Grocy(config.grocy_api_key, config.grocy_api_url);
-    this.grocyStock = new GrocyStock(this.grocy);
-    await this.fetchStock();     
+    this.fetchStock();     
+  }
+
+  //Récupérations des données de stock, et quantité + formatages
+  //Récupération des emplacements si l'option est activée
+  //Récupération des groupes de produits si l'option est activée
+  async fetchStock() {
+
+    this.stockItems = await this.grocy.GetStock();
+    this.amount = await this.grocy.GetObjects("quantity_units");
+
+    this.stockItems = this.formatAmount(this.stockItems, this.amount);
+
+    if (this.config.location_Name == true) {
+      let locations = await this.grocy.GetLocations(this.config.location_id);
+      this.postLogConsole("Emplacements récupérés:", locations);
+
+      for (let item of this.stockItems) {
+        const location = locations.find(loc => loc.id === item.product.location_id);
+        if (location) {
+          item.product.location_name = location.name; // Ajoute le nom de l'emplacement à l'article
+        } else {
+          item.product.location_name = "Inconnu"; // Valeur par défaut si l'emplacement n'est pas trouvé
+        }
+      }
+    }
 
     if (this.config.filterGroup) {
       this.groupedItems = await this.fetchProductGroup();
@@ -38,33 +63,15 @@ class GrocyStockCard extends LitElement {
       this.groupedItems = this.groupStock(this.stockItems);
     }
 
-  }
-
-  async fetchStock() {
-    this.stockItems = await this.GetEntity("stock");
-
-    if (this.config.location_Name == true) {
-      let locations = await this.grocy.GetLocations(this.config.location_id);
-      console.log("Emplacements récupérés:", locations);
-
-      for (let item of this.stockItems) {
-        const location = locations.find(loc => loc.id === item.product.location_id);
-        if (location) {
-          item.product.location_name = location.name; // Ajoute le nom de l'emplacement à l'article
-        } else {
-          item.product.location_name = "Inconnu"; // Valeur par défaut si l'emplacement n'est pas trouvé
-        }
-      }
-    }
-
-    console.log("Stock récupéré:", this.stockItems); 
+    this.postLogConsole("Stock récupéré:", this.stockItems); 
+    this.lastFetch = new Date(); // Met à jour la date/heure de dernière récupération
   }
 
   async fetchProductGroup() {
 
     let product_groups = await this.grocy.GetObjects("product_groups", this.config.filterGroup);    
     //this.groupedItems = product_groups;
-    console.log("Groupes d'articles récupérés:", product_groups);
+    this.postLogConsole("Groupes d'articles récupérés:", product_groups);
 
     return this.groupStockByGroups(this.stockItems, product_groups);
   }
@@ -72,7 +79,7 @@ class GrocyStockCard extends LitElement {
   async fetchLocation() {
 
     let locations = await this.grocy.GetLocations(this.config.location_id);
-    console.log("Emplacements récupérés:", locations);
+    this.postLogConsole("Emplacements récupérés:", locations);
 
     return this.groupStockLocation(this.stockItems, locations);
 
@@ -106,7 +113,7 @@ class GrocyStockCard extends LitElement {
       }
 
     });
-    console.log("Groupes d'articles formatés:", groups);
+    this.postLogConsole("Groupes d'articles formatés:", groups);
     return groups;
   }
 
@@ -125,8 +132,26 @@ class GrocyStockCard extends LitElement {
       }
 
     });
-    console.log("Groupes d'articles formatés:", groups);
+    this.postLogConsole("Groupes d'articles formatés:", groups);
     return groups;
+  }
+
+  //permets d'ajouter le nom de l'unités dans le stock
+  formatAmount(stock, amounts) {
+    const amountMap = Object.fromEntries(amounts.map(a => [a.id, a]));
+
+    stock.forEach(item => {
+      const unitId = item.product?.qu_id_stock;
+      const unitObj = amountMap[unitId];
+      const qty = item.amount ?? 0;
+
+      // Choix entre singulier/pluriel
+      const unitName = qty < 1.1 ? unitObj?.name : unitObj?.name_plural ;//|| unitObj?.name || "unités";
+
+      item.formattedAmount = `${qty} ${unitName}`;
+    });
+
+    return stock;
   }
 
   toggleGroup(groupName) {
@@ -134,22 +159,14 @@ class GrocyStockCard extends LitElement {
     this.requestUpdate();
   }
 
-  /*
-  async consumeItem(productId, productName) {
+  
+  async consumeItem(product, productid) {
     try {
-      const response = await fetch(`${this.config.grocy_api_url}/api/stock/products/${productId}/consume`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "GROCY-API-KEY": this.config.grocy_api_key
-        },
-        body: JSON.stringify({ amount: 1 })
-      });
+      const response = await this.grocy.ConsumeStock(productid, 1);
 
       if (response.ok) {
-        alert(`Consommation réussie pour ${productName}`);
-        this.fetchEntity();
+        //alert(`Consommation réussie pour ${product.name}`);
+        await this.fetchStock(); // Rafraîchit le stock après consommation
       } else {
         const err = await response.json();
         alert(`Erreur lors de la consommation: ${err.error_message || 'Erreur inconnue'}`);
@@ -157,33 +174,52 @@ class GrocyStockCard extends LitElement {
     } catch (error) {
       alert(`Erreur de connexion: ${error.message}`);
     }
-  }*/
+  }
+
+  async addStockItem(product, productid) {
+    try {
+      const response = await this.grocy.AddStock(productid, 1);
+      if (response.ok) {
+        await this.fetchStock(); // Rafraîchit le stock après ajout
+      } else {
+        const err = await response.json();
+        alert(`Erreur lors de l'ajout: ${err.error_message || 'Erreur inconnue'}`);
+      }
+    } catch (error) {
+      alert(`Erreur de connexion: ${error.message}`);
+    }
+  }
 
   render() {
     return html`
       <ha-card header="${this.config.title || 'Stock Grocy'}">
-        <div>
+        <div style="display: flex; align-items: center; gap: 1em; margin-bottom: 0.5em;">
           <button @click="${this.fetchStock}">🔄 Mettre à jour</button>
-          ${Object.entries(this.groupedItems).map(([group, items]) => html`
-            <table>
-              <thead class="group-header" @click="${() => this.toggleGroup(group)}">
-                <tr><th colspan="4">${group} (${items.length})</th></tr>
-              </thead>
-              ${this.expandedGroups[group] ? html`
-              <tbody>
-                ${items.map(item => html`
-                  <tr>
-                    <td>${item.product.name}</td>
-                    <td>${item.product.location_name || '-'}</td>
-                    <td>${item.amount}</td>
-                    <td><button @click="${() => this.consumeItem(item.product_id, item.product.name)}">Consommer</button></td>
-                  </tr>
-                `)}
-              </tbody>
-              ` : ''}
-            </table>
-          `)}
+          <span style="font-size: 0.9em; color: #666;">
+            Dernière mise à jour :
+            ${this.lastFetch ? this.lastFetch.toLocaleString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit', day: '2-digit', month: '2-digit', year: '2-digit' }) : 'Jamais'}
+          </span>
         </div>
+        ${Object.entries(this.groupedItems).map(([group, items]) => html`
+          <table>
+            <thead class="group-header" @click="${() => this.toggleGroup(group)}">
+              <tr><th colspan="5">${group} (${items.length})</th></tr>
+            </thead>
+            ${this.expandedGroups[group] ? html`
+            <tbody>
+              ${items.map(item => html`
+                <tr>
+                  <td>${item.product.name}</td>
+                  <td>${item.product.location_name || '-'}</td>
+                  <td>${item.formattedAmount}</td>
+                  <td><button class="remove" @click="${() => this.consumeItem(item, item.product.id)}">Consommer</button></td>
+                  <td><button class="add" @click="${() => this.addStockItem(item, item.product.id)}">Ajouter</button></td>
+                </tr>
+              `)}
+            </tbody>
+            ` : ''}
+          </table>
+        `)}
       </ha-card>
     `;
   }
@@ -195,19 +231,33 @@ class GrocyStockCard extends LitElement {
     }
     th, td {
       border: 1px solid #ccc;
+      border-left: none;
+      border-right: none;
       padding: 8px;
       text-align: left;
     }
+
     button {
-      background-color: #d9534f;
-      color: white;
-      border: none;
+      /*background-color: #d9534f;
+      color: white;*/
+      border: solid 2px black;
+      border-radius: 4px;
+      box-shadow: 2px 2px;
       padding: 5px 10px;
       cursor: pointer;
     }
+    .add{
+      border :1px solid rgb(20, 189, 20);
+      box-shadow: 2px 2px rgb(20, 189, 20);
+    }  
+    .remove{
+      border:1px solid rgb(189, 20, 20);
+      box-shadow: 2px 2px rgb(189, 20, 20);
+    } 
     button:hover {
-      background-color: #c9302c;
+      background-color:rgba(145, 232, 240, 0.45);
     }
+
     .group-header {
       background-color: #eee;
       cursor: pointer;
@@ -216,6 +266,12 @@ class GrocyStockCard extends LitElement {
 
   getCardSize() {
     return 3;
+  }
+
+  postLogConsole(message = "", object = null) {
+    if (this.config.debug != null && this.config.debug) {
+      console.log( message, object);
+    }
   }
 }
 

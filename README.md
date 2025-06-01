@@ -1,5 +1,6 @@
 # HA_GrocyStock-card
 A custom grocy stock card for Home Assistant to display stock since grocy api.
+![](image.png)
 
 ## Installation
 
@@ -25,10 +26,9 @@ Add a custom button-card to your dashboard.
 
 
 ```yaml
-type: custom:temperature-card
-  title: "Cave à vin" 
-  grocy_api_key: "apiKey"
-  grocy_api_url: "https://en.demo.grocy.info/"
-  filterGroup: [1,2,3,4,5]
-  #location_Name: true
+type: custom:grocystock-card
+grocy_api_key: "apiKey"
+grocy_api_url: "https://en.demo.grocy.info/"
+filterGroup: [1,2,3,4,5]
+location_Name: true
 ```

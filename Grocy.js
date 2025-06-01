@@ -5,9 +5,9 @@ export class Grocy {
         this.apiUrl = apiUrl;
     }
 
-    async GetEntity(entity) {
+    async GetStock() {
         try {
-            const response = await fetch(`${this.apiUrl}/api/${entity}`, {
+            const response = await fetch(`${this.apiUrl}/api/stock`, {
                 headers: {
                 'GROCY-API-KEY': this.apiKey
                 }
@@ -15,7 +15,41 @@ export class Grocy {
             const items = await response.json();
             return items;
         } catch (err) {
-            console.error(`Erreur lors de la récupération du ${entity}:`, err);
+            console.error(`Erreur lors de la récupération du stock:`, err);
+            return [];
+        }
+    }
+
+    async ConsumeStock(productId, qty) {
+        try {
+            const response = await fetch(`${this.apiUrl}/api/stock/products/${productId}/consume`, {
+                method: "POST",
+                headers: {
+                'GROCY-API-KEY': this.apiKey,
+                'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ "amount": qty, "transaction_type": "consume","spoiled": false })
+            });
+            return response;
+        } catch (err) {
+            console.error(`Erreur lors de la récupération du stock:`, err);
+            return [];
+        }
+    }
+
+    async AddStock(productId, qty) {
+        try {
+            const response = await fetch(`${this.apiUrl}/api/stock/products/${productId}/add`, {
+                method: "POST",
+                headers: {
+                'GROCY-API-KEY': this.apiKey,
+                'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ "amount": qty, "transaction_type": "purchase","price": "0", "best_before_date":"2099-01-01" })
+            });
+            return response;
+        } catch (err) {
+            console.error(`Erreur lors de la récupération du stock:`, err);
             return [];
         }
     }

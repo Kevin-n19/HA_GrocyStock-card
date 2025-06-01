@@ -192,7 +192,7 @@ class GrocyStockCard extends LitElement {
 
   render() {
     return html`
-      <ha-card header="${this.config.title || 'Stock Grocy'}">
+      <ha-card header="${this.config.title || ''}" icon="mdi:bottle-wine">
         <div style="display: flex; align-items: center; gap: 1em; margin-bottom: 0.5em;">
           <button @click="${this.fetchStock}">🔄 Mettre à jour</button>
           <span style="font-size: 0.9em; color: #666;">
@@ -208,7 +208,7 @@ class GrocyStockCard extends LitElement {
             ${this.expandedGroups[group] ? html`
             <tbody>
               ${items.map(item => html`
-                <tr>
+                <tr class="item">
                   <td>${item.product.name}</td>
                   <td>${item.product.location_name || '-'}</td>
                   <td>${item.formattedAmount}</td>
@@ -229,39 +229,52 @@ class GrocyStockCard extends LitElement {
       width: 100%;
       border-collapse: collapse;
     }
+    
+    .group-header {
+      background-color: darkgrey; /*var(--card-background-color, white);*/
+      filter: grayscale(1)
+      cursor: pointer;
+      color: var(--primary-text-color, black);
+    }
+
+    .item{
+      background-color: #cfcccc;  
+     /*opacity: 0.60; */   
+    }
+
     th, td {
-      border: 1px solid #ccc;
+      border: 1px solid var(--paper-item-icon-color, #44739e);
+      box-shadow: 0px 3px var(--paper-item-icon-color, #44739e) ;
       border-left: none;
       border-right: none;
-      padding: 8px;
+      padding: 5px;
       text-align: left;
+      
     }
 
     button {
-      /*background-color: #d9534f;
-      color: white;*/
-      border: solid 2px black;
+      background-color: var(--paper-item-icon-color, #44739e);
+      color: var(--primary-text-color, black);
+      border: solid 2px darkgrey;
       border-radius: 4px;
-      box-shadow: 2px 2px;
+      box-shadow: 2px 2px #cfcccc;
       padding: 5px 10px;
       cursor: pointer;
     }
     .add{
-      border :1px solid rgb(20, 189, 20);
-      box-shadow: 2px 2px rgb(20, 189, 20);
+      background-color: rgb(20, 189, 20);
+      border :1px solid rgb(39, 119, 39);
+      box-shadow: 2px 2px rgb(39, 119, 39);
     }  
     .remove{
-      border:1px solid rgb(189, 20, 20);
-      box-shadow: 2px 2px rgb(189, 20, 20);
+      background-color: rgb(189, 20, 20);
+      border:1px solid rgb(110, 28, 28);
+      box-shadow: 2px 2px rgb(110, 28, 28);
     } 
     button:hover {
-      background-color:rgba(145, 232, 240, 0.45);
+      background-color:rgb(143, 148, 148);
     }
 
-    .group-header {
-      background-color: #eee;
-      cursor: pointer;
-    }
   `;
 
   getCardSize() {

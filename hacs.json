@@ -1,0 +1,7 @@
+{
+    "name": "GrocyStock Card",
+    "content_in_root": false,
+    "render_readme": true,
+    "filename": "GrocyStock-card.js",
+    "homeassistant": "2025.1.0"
+  }
